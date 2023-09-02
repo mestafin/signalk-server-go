@@ -42,7 +42,7 @@ func main() {
 	ctx := context.Background()
 	cfg := tls.Config{}
 
-	var listenPort int = 3000
+	var listenPort int = 3100
 
 	enableTls := flag.Bool("tls", false, "Enable tls")
 	tlsCertFile := flag.String("tlscert", "", "Tls certificate file")
@@ -53,7 +53,7 @@ func main() {
 	debug := flag.Bool("debug", false, "Enable debugging")
 	staticPath := flag.String("webapp-path", "./static", "Path to webapps")
 	chartsPath := flag.String("charts-path", "./static", "Path to the charts")
-	mmsi := flag.String("mmsi", "", "Vessel MMSI")
+	mmsi := flag.String("mmsi", "12348888", "Vessel MMSI")
 	var fileSources arrayFlag
 	flag.Var(&fileSources, "file-source", "Path to candump file")
 	var sources arrayFlag
