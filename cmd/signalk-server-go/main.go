@@ -100,7 +100,7 @@ func main() {
 	if *version {
 		fmt.Printf("%s version : %s\n", signalkServer.GetName(), signalkServer.GetVersion())
 		fmt.Printf("canboat version : %s\n", canboat.Version)
-		fmt.Printf("signalk version : 2.0.0\n")
+		fmt.Printf("signalk version : 2.1.0\n")
 		return
 	}
 
