@@ -15,6 +15,7 @@ import (
 	"github.com/wdantuma/signalk-server-go/signalkserver"
 	"github.com/wdantuma/signalk-server-go/source/cansource"
 	"github.com/wdantuma/signalk-server-go/source/filesource"
+	"github.com/wdantuma/signalk-server-go/source/ydsource"
 )
 
 type arrayFlag []string
@@ -54,10 +55,16 @@ func main() {
 	staticPath := flag.String("webapp-path", "./static", "Path to webapps")
 	chartsPath := flag.String("charts-path", "./static", "Path to the charts")
 	mmsi := flag.String("mmsi", "12348888", "Vessel MMSI")
+	//ydtcp := flag.String("ydtcp", "10.5.5.39:1456", "YD TCP Server Address:port")
+
 	var fileSources arrayFlag
 	flag.Var(&fileSources, "file-source", "Path to candump file")
+
 	var sources arrayFlag
 	flag.Var(&sources, "source", "Source Can device")
+
+	var ydSources arrayFlag
+	flag.Var(&ydSources, "yd-source", "Source YD TCP Server address:port")
 
 	flag.Parse()
 
@@ -115,6 +122,17 @@ func main() {
 				log.Fatal(err)
 			} else {
 				signalkServer.AddSource(canSource)
+			}
+		}
+	}
+
+	if len(ydSources) > 0 {
+		for _, ap := range ydSources {
+			ydSource, err := tcpsource.NewYdSource(ap)
+			if err != nil {
+				log.Fatal(err)
+			} else {
+				signalkServer.AddSource(ydSource)
 			}
 		}
 	}

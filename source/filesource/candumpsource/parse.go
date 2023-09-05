@@ -26,6 +26,7 @@ func Parse(s string) (can.Frame, error) {
 	if err != nil {
 		return frame, err
 	}
+	
 	frame.Data.UnpackBigEndian(data)
 	frame.Length = 8
 

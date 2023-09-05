@@ -32,6 +32,7 @@ func NewCanDumpSource(file string) (*canDumpSource, error) {
 	}
 	canSource.label = path.Base(file)
 	canSource.source = make(chan can.Frame)
+	
 	go func() {
 		for {
 			fileScanner := bufio.NewScanner(canSource.file)

@@ -3,7 +3,9 @@ package pgn
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/wdantuma/signalk-server-go/canboat"
@@ -21,12 +23,22 @@ func (field n2kFields) Contains(key string) bool {
 	return ok
 }
 
+func (field n2kFields) Instance() string {
+	inst, ok := field["instance"]
+	if ok {
+		return fmt.Sprintf("%.0f", Float64Value(inst))
+	} else {
+		return ""
+	}
+}
+
 type field struct {
-	filter  func(n2kFields) bool
-	value   func(n2kFields) interface{}
-	context func(n2kFields) *string
-	node    string
-	source  string
+	filter   func(n2kFields) bool
+	value    func(n2kFields) interface{}
+	context  func(n2kFields) *string
+	instance func(n2kFields) string
+	node     string
+	source   string
 }
 
 type PgnBase struct {
@@ -72,9 +84,13 @@ func (pgn *PgnBase) Convert(frame source.ExtendedFrame, source string) (signalk.
 	fields := make(n2kFields)
 	metadata := make(map[string]signalk.Meta)
 
+	//log.Println("\nPgn:", pgn.Pgn) // print PGN number
+
+	// iterate PGN field definitions and update 'fields' of type n2kfields
+	// with the value of the field from the source frame
 	for _, f := range pgn.PgnInfo.Fields.Field {
 
-		field := f // copy
+		pgnField := f // copy
 
 		meta := signalk.Meta{}
 		unit := f.Unit
@@ -82,37 +98,38 @@ func (pgn *PgnBase) Convert(frame source.ExtendedFrame, source string) (signalk.
 		meta.Description = f.Description
 		metadata[f.Id] = meta
 
-		if field.BitOffset == 0 && field.BitLength == 0 {
-			field.BitOffset = lookupFieldTypeField.BitOffset
-			field.BitLength = lookupFieldTypeField.BitLength
-			field.FieldType = lookupFieldTypeField.FieldType
-			field.Unit = lookupFieldTypeField.Unit
-			field.Signed = lookupFieldTypeField.Signed
-			field.Resolution = lookupFieldTypeField.Resolution
-			field.RangeMax = lookupFieldTypeField.RangeMax
-			field.RangeMin = lookupFieldTypeField.RangeMin
-			field.LookupEnumeration = lookupFieldTypeField.LookupEnumeration
-			field.LookupBitEnumeration = lookupFieldTypeField.LookupBitEnumeration
+		if pgnField.BitOffset == 0 && pgnField.BitLength == 0 {
+			pgnField.BitOffset = lookupFieldTypeField.BitOffset
+			pgnField.BitLength = lookupFieldTypeField.BitLength
+			pgnField.FieldType = lookupFieldTypeField.FieldType
+			pgnField.Unit = lookupFieldTypeField.Unit
+			pgnField.Signed = lookupFieldTypeField.Signed
+			pgnField.Resolution = lookupFieldTypeField.Resolution
+			pgnField.RangeMax = lookupFieldTypeField.RangeMax
+			pgnField.RangeMin = lookupFieldTypeField.RangeMin
+			pgnField.LookupEnumeration = lookupFieldTypeField.LookupEnumeration
+			pgnField.LookupBitEnumeration = lookupFieldTypeField.LookupBitEnumeration
 		} else {
-			lookupFieldTypeField.BitOffset = field.BitOffset + field.BitLength
+			lookupFieldTypeField.BitOffset = pgnField.BitOffset + pgnField.BitLength
 		}
 
-		switch field.FieldType {
+		switch pgnField.FieldType {
+
 		case "LOOKUP":
-			value := float64(frame.UnsignedBitsLittleEndian(int(field.BitOffset), int(field.BitLength))) * float64(field.Resolution)
-			if value >= float64(field.RangeMin) && value <= float64(field.RangeMax) {
-				refValue, ok := pgn.Canboat.GetLookupEnumeration(field.LookupEnumeration, Float64Value(value))
+			value := float64(frame.UnsignedBitsLittleEndian(int(pgnField.BitOffset), int(pgnField.BitLength))) * float64(pgnField.Resolution)
+			if value >= float64(pgnField.RangeMin) && value <= float64(pgnField.RangeMax) {
+				refValue, ok := pgn.Canboat.GetLookupEnumeration(pgnField.LookupEnumeration, Float64Value(value))
 				if ok {
-					fields[field.Id] = refValue
+					fields[pgnField.Id] = refValue
 				}
 
-				fieldType, ok := pgn.Canboat.GetLookupFieldTypeEnumeration(field.LookupFieldTypeEnumeration, Float64Value(value))
+				fieldType, ok := pgn.Canboat.GetLookupFieldTypeEnumeration(pgnField.LookupFieldTypeEnumeration, Float64Value(value))
 				if ok {
-					fields[field.Id] = fieldType.Name
+					fields[pgnField.Id] = fieldType.Name
 					lookupFieldTypeField.FieldType = fieldType.FieldType
 					lookupFieldTypeField.Signed = fieldType.Signed
 					lookupFieldTypeField.Unit = fieldType.Unit
-					lookupFieldTypeField.Resolution = field.Resolution
+					lookupFieldTypeField.Resolution = pgnField.Resolution
 					lookupFieldTypeField.BitLength = fieldType.Bits
 					lookupFieldTypeField.RangeMax = 255 // TODO Fix this
 					if fieldType.FieldType == "LOOKUP" {
@@ -121,29 +138,30 @@ func (pgn *PgnBase) Convert(frame source.ExtendedFrame, source string) (signalk.
 				}
 
 			}
+
 		case "NUMBER":
 			var value float64
-			if field.Signed {
-				value = float64(frame.SignedBitsLittleEndian(int(field.BitOffset), int(field.BitLength))) * float64(field.Resolution)
+			if pgnField.Signed {
+				value = float64(frame.SignedBitsLittleEndian(int(pgnField.BitOffset), int(pgnField.BitLength))) * float64(pgnField.Resolution)
 			} else {
-				value = float64(frame.UnsignedBitsLittleEndian(int(field.BitOffset), int(field.BitLength))) * float64(field.Resolution)
+				value = float64(frame.UnsignedBitsLittleEndian(int(pgnField.BitOffset), int(pgnField.BitLength))) * float64(pgnField.Resolution)
 			}
+
 			if pgn.State.GetDebug() {
 				// do not filter out of limit values
-				fields[field.Id] = value
+				fields[pgnField.Id] = value
 			} else {
-				if value >= float64(field.RangeMin) && value <= float64(field.RangeMax) {
-					fields[field.Id] = value
+				if value >= float64(pgnField.RangeMin) && value <= float64(pgnField.RangeMax) {
+					fields[pgnField.Id] = value
 				}
 			}
-			break
+
 		case "MMSI":
 			var value float64
-			value = float64(frame.UnsignedBitsLittleEndian(int(field.BitOffset), int(field.BitLength))) * float64(field.Resolution)
-			if value >= float64(field.RangeMin) && value <= float64(field.RangeMax) {
-				fields[field.Id] = fmt.Sprintf("%.0f", value)
+			value = float64(frame.UnsignedBitsLittleEndian(int(pgnField.BitOffset), int(pgnField.BitLength))) * float64(pgnField.Resolution)
+			if value >= float64(pgnField.RangeMin) && value <= float64(pgnField.RangeMax) {
+				fields[pgnField.Id] = fmt.Sprintf("%.0f", value)
 			}
-			break
 		}
 	}
 
@@ -152,11 +170,20 @@ func (pgn *PgnBase) Convert(frame source.ExtendedFrame, source string) (signalk.
 
 		val := signalk.DeltaJsonUpdatesElemValuesElem{}
 		meta := signalk.DeltaJsonUpdatesElemMetaElem{}
+
 		if field.context != nil {
 			delta.Context = field.context(fields)
 		} else {
+
+			// add instance to node path
+			if field.instance != nil {
+				instance := field.instance(fields)
+				field.node = addInstance(field.node, instance)
+			}
+
 			val.Path = field.node
 			meta.Path = field.node
+
 			if field.source != "" {
 				value, ok := fields[field.source]
 				if !ok {
@@ -173,11 +200,13 @@ func (pgn *PgnBase) Convert(frame source.ExtendedFrame, source string) (signalk.
 				log.Println("No value function")
 				continue
 			}
+
 			if (field.filter != nil && field.filter(fields)) || field.filter == nil {
 				include = true
 				delta.Updates[len(delta.Updates)-1].Meta = append(delta.Updates[len(delta.Updates)-1].Meta, meta)
 				delta.Updates[len(delta.Updates)-1].Values = append(delta.Updates[len(delta.Updates)-1].Values, val)
 			}
+
 		}
 	}
 
@@ -193,6 +222,11 @@ func (base *PgnBase) Init(canboat *canboat.Canboat, state state.ServerState) boo
 	}
 	base.PgnInfo = pgnInfo
 	return true
+}
+
+func (pgn *PgnBase) GetInstance() *string {
+	//pgn.PgnInfo.Fields
+	return nil
 }
 
 func Float64Value(value interface{}) float64 {
@@ -226,6 +260,35 @@ func GetMmsiContext(fields n2kFields) *string {
 	if fields.Contains("userId") {
 		mmsi := fmt.Sprintf("vessels.urn:mrn:imo:mmsi:%s", StringValue(fields["userId"]))
 		return &mmsi
+	} else {
+		return nil
+	}
+}
+
+func addInstance(node string, instance string) string {
+	// replace last dot in node string with instance
+	if instance != "" {
+		i := strings.LastIndex(node, ".")
+		return node[:i] + "." + instance + node[i:]
+	}
+	return node
+}
+
+func skEngineId(fields n2kFields) *string {
+
+	inst, ok := fields["instance"]
+	var id string
+	if ok {
+		if reflect.TypeOf(inst).String() == "int" {
+			id = fmt.Sprintf("%.0f", Float64Value(inst))
+		} else {
+			if inst == "Single Engine or Dual Engine Port" {
+				id = "port"
+			} else {
+				id = "starboard"
+			}
+		}
+		return &id
 	} else {
 		return nil
 	}

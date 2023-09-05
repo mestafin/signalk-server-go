@@ -16,7 +16,7 @@ func Parse(s string) ([]can.Frame, error) {
 		return frames, errors.New("Invalid actisense string")
 	}
 	var fid uint32
-	prio, err := strconv.ParseUint(parts[1], 10, 3)
+	prio, err := strconv.ParseUint(parts[1], 10, 32)
 	if err != nil {
 		return frames, err
 	}

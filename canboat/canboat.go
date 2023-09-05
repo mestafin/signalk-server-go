@@ -3,7 +3,8 @@ package canboat
 import (
 	"embed"
 	"encoding/xml"
-	"io/ioutil"
+	//"io/ioutil"
+	"io"
 	"log"
 )
 
@@ -26,7 +27,8 @@ func NewCanboat() (*Canboat, error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	byteValue, _ := ioutil.ReadAll(xmlFile)
+	//byteValue, _ := ioutil.ReadAll(xmlFile)
+	byteValue, _ := io.ReadAll(xmlFile)
 
 	// we initialize our Users array
 
